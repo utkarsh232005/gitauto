@@ -25,6 +25,15 @@ import type { User, GithubRepo, GithubBranch, GithubFile } from "@/lib/github"
 import { performModification, logout, getRepos, getBranches, getFiles } from "@/app/actions"
 import { GitAutomatorIcon } from './icons'
 
+const IGNORED_PATHS = [
+    'node_modules/',
+    '.next/',
+    '.vercel/',
+    'package-lock.json',
+    '.DS_Store',
+    '.vscode/'
+];
+
 export default function MainPage({ token, user }: { token: string, user: User }) {
   const [repos, setRepos] = useState<GithubRepo[]>([])
   const [branches, setBranches] = useState<GithubBranch[]>([])
@@ -33,7 +42,6 @@ export default function MainPage({ token, user }: { token: string, user: User })
   const [selectedRepo, setSelectedRepo] = useState("")
   const [selectedBranch, setSelectedBranch] = useState("")
   const [selectedFile, setSelectedFile] = useState("")
-  const [fileContent, setFileContent] = useState("")
   const [fileSha, setFileSha] = useState("")
 
   const [isPending, startTransition] = useTransition()
@@ -56,7 +64,6 @@ export default function MainPage({ token, user }: { token: string, user: User })
     setSelectedFile("")
     setBranches([])
     setFiles([])
-    setFileContent("")
     setFileSha("")
     setIsLoading(prev => ({ ...prev, branches: true }))
     try {
@@ -73,12 +80,14 @@ export default function MainPage({ token, user }: { token: string, user: User })
     setSelectedBranch(branchName)
     setSelectedFile("")
     setFiles([])
-    setFileContent("")
     setFileSha("")
     setIsLoading(prev => ({ ...prev, files: true }))
     try {
       const fileData = await getFiles(token, selectedRepo, branchName)
-      setFiles(fileData.filter(file => file.type === 'blob')) // Only show files
+      const filteredFiles = fileData.filter(file =>
+        file.type === 'blob' && !IGNORED_PATHS.some(p => file.path.startsWith(p))
+      )
+      setFiles(filteredFiles)
     } catch (err) {
       toast({ variant: "destructive", title: "Error", description: "Failed to fetch files." })
     } finally {
@@ -108,7 +117,6 @@ export default function MainPage({ token, user }: { token: string, user: User })
         })
         // Optionally reset form
         setSelectedFile("")
-        setFileContent("")
         const requestTextarea = document.getElementById('request') as HTMLTextAreaElement;
         if (requestTextarea) requestTextarea.value = '';
       } else {
