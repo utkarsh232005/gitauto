@@ -163,17 +163,17 @@ export default function MainPage({ token, user }: { token: string, user: User })
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
           <GitAutomatorIcon className="h-8 w-8 text-primary" />
-          <h1 className="text-xl font-bold">GitAutomator</h1>
+          <h1 className="text-lg md:text-xl font-bold">GitAutomator</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
               <AvatarImage src={user.avatar_url} alt={user.login} />
               <AvatarFallback>{user.login.charAt(0).toUpperCase()} </AvatarFallback>
             </Avatar>
-            <span className="font-medium">{user.name || user.login}</span>
+            <span className="hidden sm:inline font-medium">{user.name || user.login}</span>
           </div>
           <form action={handleLogout}>
             <Button type="submit" variant="ghost" size="icon">
@@ -183,16 +183,16 @@ export default function MainPage({ token, user }: { token: string, user: User })
           </form>
         </div>
       </header>
-      <main className="flex-1 p-4 md:p-8 flex flex-col items-center gap-8">
+      <main className="flex-1 p-4 md:p-8 flex flex-col items-center gap-6 md:gap-8">
         
         {/* Bookmarked Repositories Section */}
         <div className="w-full max-w-4xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 sm:gap-0">
+              <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 self-start sm:self-center">
                 <Star className="h-6 w-6 text-yellow-400 fill-yellow-400" />
                 Bookmarked Repositories
               </h2>
-               <div className="relative w-full max-w-xs">
+               <div className="relative w-full sm:max-w-xs">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
                   placeholder="Search bookmarks..."
@@ -215,7 +215,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
                         <CardTitle className="text-base">{repo.name}</CardTitle>
                         <CardDescription className="text-xs">{repo.full_name}</CardDescription>
                      </div>
-                     <button onClick={(e) => toggleBookmark(repo.full_name, e)}>
+                     <button onClick={(e) => toggleBookmark(repo.full_name, e)} aria-label={`Bookmark ${repo.name}`}>
                         <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
                      </button>
                   </CardHeader>
@@ -238,7 +238,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
 
         <Card className="w-full max-w-2xl shadow-lg">
           <CardHeader>
-            <CardTitle>Create a New Code Modification</CardTitle>
+            <CardTitle className="text-xl md:text-2xl">Create a New Code Modification</CardTitle>
             <CardDescription>Select a repository, branch, and file, then describe the changes you want to make.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -326,8 +326,8 @@ export default function MainPage({ token, user }: { token: string, user: User })
                 <Textarea
                   id="request"
                   name="request"
-                  placeholder="e.g., 'Add a new function that sorts an array in descending order', 'Change the primary button color to blue'"
-                  rows={5}
+                  placeholder="e.g., 'Add a new function that sorts an array in descending order'"
+                  rows={4}
                   disabled={!selectedFile || isPending}
                   required
                 />
