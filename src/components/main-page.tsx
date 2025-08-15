@@ -71,8 +71,8 @@ export default function MainPage({ token, user }: { token: string, user: User })
     })
   }, [token, toast])
 
-  const toggleBookmark = (repoFullName: string, event?: React.MouseEvent) => {
-    event?.stopPropagation(); // Prevent dropdown from closing if called from there
+  const toggleBookmark = (repoFullName: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent dropdown from closing or card from being clicked
     const newBookmarkedRepos = bookmarkedRepos.includes(repoFullName)
       ? bookmarkedRepos.filter(r => r !== repoFullName)
       : [...bookmarkedRepos, repoFullName];
@@ -348,5 +348,3 @@ export default function MainPage({ token, user }: { token: string, user: User })
     </div>
   )
 }
-
-    
