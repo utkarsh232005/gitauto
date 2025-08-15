@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import {
   Github,
@@ -23,6 +24,8 @@ import {
   Loader2,
   Wand2,
   Star,
+  Search,
+  BookUser
 } from "lucide-react"
 import type { User, GithubRepo, GithubBranch, GithubFile } from "@/lib/github"
 import { performModification, logout, getRepos, getBranches, getFiles } from "@/app/actions"
@@ -42,6 +45,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
   const [branches, setBranches] = useState<GithubBranch[]>([])
   const [files, setFiles] = useState<GithubFile[]>([])
   const [bookmarkedRepos, setBookmarkedRepos] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [selectedRepo, setSelectedRepo] = useState("")
   const [selectedBranch, setSelectedBranch] = useState("")
@@ -67,8 +71,8 @@ export default function MainPage({ token, user }: { token: string, user: User })
     })
   }, [token, toast])
 
-  const toggleBookmark = (repoFullName: string, event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent dropdown from closing
+  const toggleBookmark = (repoFullName: string, event?: React.MouseEvent) => {
+    event?.stopPropagation(); // Prevent dropdown from closing if called from there
     const newBookmarkedRepos = bookmarkedRepos.includes(repoFullName)
       ? bookmarkedRepos.filter(r => r !== repoFullName)
       : [...bookmarkedRepos, repoFullName];
@@ -78,6 +82,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
   }
 
   const handleRepoChange = async (repoFullName: string) => {
+    if (!repoFullName) return;
     setSelectedRepo(repoFullName)
     setSelectedBranch("")
     setSelectedFile("")
@@ -151,9 +156,13 @@ export default function MainPage({ token, user }: { token: string, user: User })
   const favoriteRepos = repos.filter(repo => bookmarkedRepos.includes(repo.full_name));
   const otherRepos = repos.filter(repo => !bookmarkedRepos.includes(repo.full_name));
 
+  const filteredFavoriteRepos = favoriteRepos.filter(repo =>
+    repo.full_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <header className="flex items-center justify-between p-4 border-b bg-card">
+      <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
         <div className="flex items-center gap-3">
           <GitAutomatorIcon className="h-8 w-8 text-primary" />
           <h1 className="text-xl font-bold">GitAutomator</h1>
@@ -174,7 +183,59 @@ export default function MainPage({ token, user }: { token: string, user: User })
           </form>
         </div>
       </header>
-      <main className="flex-1 p-4 md:p-8 flex justify-center">
+      <main className="flex-1 p-4 md:p-8 flex flex-col items-center gap-8">
+        
+        {/* Bookmarked Repositories Section */}
+        <div className="w-full max-w-4xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Star className="h-6 w-6 text-yellow-400 fill-yellow-400" />
+                Bookmarked Repositories
+              </h2>
+               <div className="relative w-full max-w-xs">
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search bookmarks..."
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+          {filteredFavoriteRepos.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredFavoriteRepos.map(repo => (
+                <Card 
+                  key={repo.id}
+                  className={`cursor-pointer transition-all hover:shadow-lg hover:border-primary ${selectedRepo === repo.full_name ? 'border-primary shadow-lg' : ''}`}
+                  onClick={() => handleRepoChange(repo.full_name)}
+                >
+                  <CardHeader className="flex-row items-start justify-between gap-4 pb-2">
+                     <div className="space-y-1">
+                        <CardTitle className="text-base">{repo.name}</CardTitle>
+                        <CardDescription className="text-xs">{repo.full_name}</CardDescription>
+                     </div>
+                     <button onClick={(e) => toggleBookmark(repo.full_name, e)}>
+                        <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                     </button>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                       <BookUser className="h-3 w-3" />
+                       {repo.private ? 'Private' : 'Public'}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground py-8">
+              <p>No bookmarked repositories found.</p>
+              <p className="text-sm">Click the star icon in the repository list to add one.</p>
+            </div>
+          )}
+        </div>
+
         <Card className="w-full max-w-2xl shadow-lg">
           <CardHeader>
             <CardTitle>Create a New Code Modification</CardTitle>
@@ -287,3 +348,5 @@ export default function MainPage({ token, user }: { token: string, user: User })
     </div>
   )
 }
+
+    
