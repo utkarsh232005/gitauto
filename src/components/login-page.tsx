@@ -21,7 +21,7 @@ export default function LoginPage() {
             Sign in with your GitHub account to get started. We'll need access to your repositories to read files and commit changes.
           </p>
           <Button asChild size="lg" className="w-full">
-            <a href="/api/auth/github">
+            <a href="/api/auth/github" target="_top">
               <Github className="mr-2 h-5 w-5" />
               Sign in with GitHub
             </a>
