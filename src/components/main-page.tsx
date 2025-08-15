@@ -210,6 +210,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
                           ))}
                         </SelectGroup>
                       )}
+                      {otherRepos.length > 0 && (
                       <SelectGroup>
                         {favoriteRepos.length > 0 && <SelectLabel>All Repositories</SelectLabel>}
                         {otherRepos.map(repo => (
@@ -224,6 +225,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
                           </SelectItem>
                         ))}
                       </SelectGroup>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -285,5 +287,3 @@ export default function MainPage({ token, user }: { token: string, user: User })
     </div>
   )
 }
-
-    
