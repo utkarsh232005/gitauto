@@ -51,6 +51,12 @@ async function githubApi(endpoint: string, token: string, options: RequestInit =
   if (response.status === 204) {
     return null;
   }
+  
+  // Handle raw text response for certain endpoints
+  const contentType = response.headers.get("content-type");
+  if (contentType && (contentType.includes("text/plain") || contentType.includes("application/vnd.github.raw"))) {
+    return response.text();
+  }
 
   return response.json();
 }
@@ -77,16 +83,13 @@ export async function getRepoTree(token: string, repoFullName: string, branchNam
 }
 
 export async function getFileRawContent(token: string, repoFullName: string, filePath: string): Promise<{content: string, sha: string}> {
-    const response = await githubApi(`/repos/${repoFullName}/contents/${filePath}`, token, {
-        headers: { Accept: "application/vnd.github.raw+json" }
-    });
-    
-    // The raw content call doesn't return sha, so we make another call.
-    // This is inefficient but necessary for now.
     const metaResponse = await githubApi(`/repos/${repoFullName}/contents/${filePath}`, token);
+    
+    if (metaResponse.encoding !== 'base64') {
+        throw new Error(`Unsupported file encoding: ${metaResponse.encoding}`);
+    }
 
-    const contentInBase64 = Buffer.from(response).toString('base64');
-    const content = Buffer.from(contentInBase64, 'base64').toString('utf-8');
+    const content = Buffer.from(metaResponse.content, 'base64').toString('utf-8');
     
     return { content, sha: metaResponse.sha };
 }
