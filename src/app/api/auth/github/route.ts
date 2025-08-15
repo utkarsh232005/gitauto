@@ -1,5 +1,4 @@
 import {NextRequest, NextResponse} from 'next/server';
-import {redirect} from 'next/navigation';
 
 export async function GET(req: NextRequest) {
   const githubClientId = process.env.GITHUB_CLIENT_ID;
@@ -22,5 +21,7 @@ export async function GET(req: NextRequest) {
   // It should match `/api/auth/callback/github`.
   const redirectUri = `https://github.com/login/oauth/authorize?client_id=${githubClientId}&scope=${scope}`;
 
-  redirect(redirectUri);
+  // Use NextResponse.redirect() to force a top-level navigation,
+  // which is required by GitHub's OAuth flow.
+  return NextResponse.redirect(redirectUri);
 }
