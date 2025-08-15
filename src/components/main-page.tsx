@@ -7,6 +7,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,6 +22,7 @@ import {
   LogOut,
   Loader2,
   Wand2,
+  Star,
 } from "lucide-react"
 import type { User, GithubRepo, GithubBranch, GithubFile } from "@/lib/github"
 import { performModification, logout, getRepos, getBranches, getFiles } from "@/app/actions"
@@ -38,6 +41,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
   const [repos, setRepos] = useState<GithubRepo[]>([])
   const [branches, setBranches] = useState<GithubBranch[]>([])
   const [files, setFiles] = useState<GithubFile[]>([])
+  const [bookmarkedRepos, setBookmarkedRepos] = useState<string[]>([]);
 
   const [selectedRepo, setSelectedRepo] = useState("")
   const [selectedBranch, setSelectedBranch] = useState("")
@@ -49,6 +53,11 @@ export default function MainPage({ token, user }: { token: string, user: User })
   const { toast } = useToast()
 
   useEffect(() => {
+    const savedBookmarks = localStorage.getItem('bookmarkedRepos');
+    if (savedBookmarks) {
+      setBookmarkedRepos(JSON.parse(savedBookmarks));
+    }
+
     getRepos(token).then(data => {
       setRepos(data)
       setIsLoading(prev => ({ ...prev, repos: false }))
@@ -57,6 +66,16 @@ export default function MainPage({ token, user }: { token: string, user: User })
       setIsLoading(prev => ({ ...prev, repos: false }))
     })
   }, [token, toast])
+
+  const toggleBookmark = (repoFullName: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent dropdown from closing
+    const newBookmarkedRepos = bookmarkedRepos.includes(repoFullName)
+      ? bookmarkedRepos.filter(r => r !== repoFullName)
+      : [...bookmarkedRepos, repoFullName];
+    
+    setBookmarkedRepos(newBookmarkedRepos);
+    localStorage.setItem('bookmarkedRepos', JSON.stringify(newBookmarkedRepos));
+  }
 
   const handleRepoChange = async (repoFullName: string) => {
     setSelectedRepo(repoFullName)
@@ -128,6 +147,9 @@ export default function MainPage({ token, user }: { token: string, user: User })
       }
     })
   }
+  
+  const favoriteRepos = repos.filter(repo => bookmarkedRepos.includes(repo.full_name));
+  const otherRepos = repos.filter(repo => !bookmarkedRepos.includes(repo.full_name));
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -140,7 +162,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
               <AvatarImage src={user.avatar_url} alt={user.login} />
-              <AvatarFallback>{user.login.charAt(0).toUpperCase()}</AvatarFallback>
+              <AvatarFallback>{user.login.charAt(0).toUpperCase()} </AvatarFallback>
             </Avatar>
             <span className="font-medium">{user.name || user.login}</span>
           </div>
@@ -167,14 +189,41 @@ export default function MainPage({ token, user }: { token: string, user: User })
                 {/* Repository Select */}
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium"><Github className="h-4 w-4" />Repository</label>
-                  <Select name="repo" onValueChange={handleRepoChange} value={selectedRepo} disabled={isPending}>
+                   <Select name="repo" onValueChange={handleRepoChange} value={selectedRepo} disabled={isPending}>
                     <SelectTrigger disabled={isLoading.repos}>
                       <SelectValue placeholder={isLoading.repos ? "Loading repos..." : "Select a repository"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {repos.map(repo => (
-                        <SelectItem key={repo.id} value={repo.full_name}>{repo.full_name}</SelectItem>
-                      ))}
+                      {favoriteRepos.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Favorites</SelectLabel>
+                          {favoriteRepos.map(repo => (
+                            <SelectItem key={repo.id} value={repo.full_name}>
+                              <div className="flex items-center justify-between w-full">
+                                <span>{repo.full_name}</span>
+                                <Star
+                                  className="h-4 w-4 text-yellow-400 fill-yellow-400 ml-2 cursor-pointer"
+                                  onClick={(e) => toggleBookmark(repo.full_name, e)}
+                                />
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                      <SelectGroup>
+                        {favoriteRepos.length > 0 && <SelectLabel>All Repositories</SelectLabel>}
+                        {otherRepos.map(repo => (
+                          <SelectItem key={repo.id} value={repo.full_name}>
+                             <div className="flex items-center justify-between w-full">
+                                <span>{repo.full_name}</span>
+                                <Star
+                                  className="h-4 w-4 text-gray-400 hover:fill-yellow-400 hover:text-yellow-400 ml-2 cursor-pointer"
+                                  onClick={(e) => toggleBookmark(repo.full_name, e)}
+                                />
+                              </div>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                 </div>
@@ -236,3 +285,5 @@ export default function MainPage({ token, user }: { token: string, user: User })
     </div>
   )
 }
+
+    
