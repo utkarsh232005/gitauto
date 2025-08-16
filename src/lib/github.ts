@@ -94,6 +94,28 @@ export async function getFileRawContent(token: string, repoFullName: string, fil
     return { content, sha: metaResponse.sha };
 }
 
+export async function createOrUpdateFile(options: {
+  token: string;
+  repo: string;
+  branch: string;
+  filePath: string;
+  newContent: string;
+  commitMessage: string;
+  fileSha?: string; // Optional: only needed for updates
+}) {
+  const { token, repo, branch, filePath, newContent, commitMessage, fileSha } = options;
+
+  return githubApi(`/repos/${repo}/contents/${filePath}`, token, {
+    method: 'PUT',
+    body: JSON.stringify({
+      message: commitMessage,
+      content: Buffer.from(newContent).toString('base64'),
+      sha: fileSha, // Will be undefined for new files, which is correct
+      branch: branch,
+    }),
+  });
+}
+
 export async function createCommitAndPush(options: {
   token: string,
   repo: string,
