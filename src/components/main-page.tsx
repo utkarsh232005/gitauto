@@ -431,7 +431,6 @@ export default function MainPage({ token, user }: { token: string, user: User })
                         <input type="hidden" name="file" value={selectedFile} />
                         <input type="hidden" name="commitMessage" value={modificationResult?.commitMessage || ''} />
                         <input type="hidden" name="modifiedContent" value={modificationResult?.modifiedContent || ''} />
-                        <input type="hidden" name="fileSha" value={modificationResult?.fileSha || ''} />
                         <Button type="submit" disabled={isCommitting}>
                             {isCommitting ? (
                                 <>

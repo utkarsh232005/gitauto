@@ -103,13 +103,15 @@ export async function commitModification(formData: FormData) {
     const file = formData.get('file') as string
     const commitMessage = formData.get('commitMessage') as string
     const modifiedContent = formData.get('modifiedContent') as string
-    const fileSha = formData.get('fileSha') as string
-
-    if (!token || !repo || !branch || !file || !commitMessage || !modifiedContent || !fileSha) {
+    
+    if (!token || !repo || !branch || !file || !commitMessage || !modifiedContent) {
         return { success: false, message: "Missing required fields for commit." }
     }
 
     try {
+        // Refetch the latest SHA right before committing
+        const { sha: latestFileSha } = await github.getFileRawContent(token, repo, file);
+
         await github.createCommitAndPush({
           token,
           repo,
@@ -117,7 +119,7 @@ export async function commitModification(formData: FormData) {
           filePath: file,
           newContent: modifiedContent,
           commitMessage: commitMessage,
-          fileSha
+          fileSha: latestFileSha
         });
     
         try {
