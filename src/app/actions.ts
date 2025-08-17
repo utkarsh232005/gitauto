@@ -76,6 +76,7 @@ export async function performModification(formData: FormData) {
     const aiResult = await modifyCode({
       request: request,
       fileContent: currentContent,
+      filePath: file,
     })
 
     if (!aiResult.modifiedContent || !aiResult.commitMessage) {

@@ -11,49 +11,82 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const ModifyCodeInputSchema = z.object({
-  request: z.string().describe('The natural language request for code modification.'),
-  fileContent: z.string().describe('The current content of the file to be modified.'),
+  request: z
+    .string()
+    .describe('The natural language request for code modification.'),
+  fileContent: z
+    .string()
+    .describe('The current content of the file to be modified.'),
+  filePath: z.string().describe('The full path of the file to be modified.'),
 });
 export type ModifyCodeInput = z.infer<typeof ModifyCodeInputSchema>;
 
 const ModifyCodeOutputSchema = z.object({
   modifiedContent: z.string().describe('The modified content of the file.'),
-  commitMessage: z.string().describe('A descriptive commit message for the changes.'),
+  commitMessage: z
+    .string()
+    .describe('A descriptive commit message for the changes.'),
 });
 export type ModifyCodeOutput = z.infer<typeof ModifyCodeOutputSchema>;
 
-export async function modifyCode(input: ModifyCodeInput): Promise<ModifyCodeOutput> {
+export async function modifyCode(
+  input: ModifyCodeInput
+): Promise<ModifyCodeOutput> {
   return modifyCodeFlow(input);
 }
 
 const modifyCodePrompt = ai.definePrompt({
   name: 'modifyCodePrompt',
   input: {schema: ModifyCodeInputSchema},
-  output: {schema: ModifyCodeOutputSchema},
-  prompt: `You are a code modification expert. Given a file content and a modification request, you will generate the modified content and a descriptive commit message.
+  output: {schema: z.object({modifiedContent: z.string()})},
+  prompt: `You are a code modification expert. Given a file content, its path, and a modification request, you will generate ONLY the modified content.
+
+File Path:
+\`\`\`
+{{filePath}}
+\`\`\`
 
 File Content:
+\`\`\`
 {{fileContent}}
+\`\`\`
 
 Modification Request:
 {{request}}
 
-Modified Content:`, // Removed redundant part of the prompt
+Return only the complete, modified file content. Do not add any extra explanations, notes, or markdown formatting around the code.
+`,
 });
 
 const commitMessagePrompt = ai.definePrompt({
   name: 'commitMessagePrompt',
-  input: {schema: z.object({request: z.string(), modifiedContent: z.string()})},
+  input: {
+    schema: z.object({
+      request: z.string(),
+      filePath: z.string(),
+      originalContent: z.string(),
+      modifiedContent: z.string(),
+    }),
+  },
   output: {schema: z.object({commitMessage: z.string()})},
-  prompt: `You are a commit message expert. Given a modification request and modified code, you will generate a descriptive commit message.
+  prompt: `You are a commit message expert. Your task is to generate a concise, descriptive commit message in the conventional commit format (e.g., "feat: Add new login button").
 
-Modification Request:
-{{request}}
+Modification Request: {{request}}
+File Path: {{filePath}}
+
+Analyze the diff between the original and modified content to understand the change.
+
+Original Content:
+\`\`\`
+{{originalContent}}
+\`\`\`
 
 Modified Content:
+\`\`\`
 {{modifiedContent}}
+\`\`\`
 
-Commit Message:`,
+Generate the commit message.`,
 });
 
 const modifyCodeFlow = ai.defineFlow(
@@ -67,6 +100,8 @@ const modifyCodeFlow = ai.defineFlow(
 
     const {output: commitMessageOutput} = await commitMessagePrompt({
       request: input.request,
+      filePath: input.filePath,
+      originalContent: input.fileContent,
       modifiedContent: modifiedContentOutput.modifiedContent,
     });
 
