@@ -17,6 +17,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog"
+import {
   Github,
   GitBranch,
   FileCode,
@@ -28,7 +37,7 @@ import {
   BookUser
 } from "lucide-react"
 import type { User, GithubRepo, GithubBranch, GithubFile } from "@/lib/github"
-import { performModification, logout, getRepos, getBranches, getFiles } from "@/app/actions"
+import { generateModification, commitModification, logout, getRepos, getBranches, getFiles } from "@/app/actions"
 import { GitAutomatorIcon } from './icons'
 
 const IGNORED_PATHS = [
@@ -36,9 +45,26 @@ const IGNORED_PATHS = [
     '.next/',
     '.vercel/',
     'package-lock.json',
+    'pnpm-lock.yaml',
+    'yarn.lock',
     '.DS_Store',
     '.vscode/'
 ];
+
+type DiffPart = {
+  value: string;
+  added?: boolean;
+  removed?: boolean;
+};
+
+type ModificationResult = {
+  success: boolean;
+  message?: string;
+  modifiedContent?: string;
+  commitMessage?: string;
+  diff?: DiffPart[];
+  fileSha?: string;
+}
 
 export default function MainPage({ token, user }: { token: string, user: User }) {
   const [repos, setRepos] = useState<GithubRepo[]>([])
@@ -50,9 +76,12 @@ export default function MainPage({ token, user }: { token: string, user: User })
   const [selectedRepo, setSelectedRepo] = useState("")
   const [selectedBranch, setSelectedBranch] = useState("")
   const [selectedFile, setSelectedFile] = useState("")
-  const [fileSha, setFileSha] = useState("")
 
-  const [isPending, startTransition] = useTransition()
+  const [modificationResult, setModificationResult] = useState<ModificationResult | null>(null);
+  const [isReviewing, setIsReviewing] = useState(false);
+
+  const [isGenerating, startGeneratingTransition] = useTransition()
+  const [isCommitting, startCommittingTransition] = useTransition()
   const [isLoading, setIsLoading] = useState({ repos: true, branches: false, files: false })
   const { toast } = useToast()
 
@@ -72,7 +101,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
   }, [token, toast])
 
   const toggleBookmark = (repoFullName: string, event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent dropdown from closing or card from being clicked
+    event.stopPropagation();
     const newBookmarkedRepos = bookmarkedRepos.includes(repoFullName)
       ? bookmarkedRepos.filter(r => r !== repoFullName)
       : [...bookmarkedRepos, repoFullName];
@@ -88,7 +117,6 @@ export default function MainPage({ token, user }: { token: string, user: User })
     setSelectedFile("")
     setBranches([])
     setFiles([])
-    setFileSha("")
     setIsLoading(prev => ({ ...prev, branches: true }))
     try {
       const branchData = await getBranches(token, repoFullName)
@@ -104,12 +132,11 @@ export default function MainPage({ token, user }: { token: string, user: User })
     setSelectedBranch(branchName)
     setSelectedFile("")
     setFiles([])
-    setFileSha("")
     setIsLoading(prev => ({ ...prev, files: true }))
     try {
       const fileData = await getFiles(token, selectedRepo, branchName)
       const filteredFiles = fileData.filter(file =>
-        file.type === 'blob' && !IGNORED_PATHS.some(p => file.path.startsWith(p))
+        file.type === 'blob' && !IGNORED_PATHS.some(p => file.path.startsWith(p) || file.path.endsWith(p))
       )
       setFiles(filteredFiles)
     } catch (err) {
@@ -121,28 +148,18 @@ export default function MainPage({ token, user }: { token: string, user: User })
 
   const handleFileChange = async (filePath: string) => {
     setSelectedFile(filePath)
-    const file = files.find(f => f.path === filePath);
-    if(file) {
-      setFileSha(file.sha)
-    }
   }
 
   const handleLogout = async () => {
     await logout()
   }
 
-  const handleSubmit = (formData: FormData) => {
-    startTransition(async () => {
-      const result = await performModification(formData)
+  const handleGenerateSubmit = (formData: FormData) => {
+    startGeneratingTransition(async () => {
+      const result = await generateModification(formData)
       if (result.success) {
-        toast({
-          title: "Success!",
-          description: result.message,
-        })
-        // Optionally reset form
-        setSelectedFile("")
-        const requestTextarea = document.getElementById('request') as HTMLTextAreaElement;
-        if (requestTextarea) requestTextarea.value = '';
+        setModificationResult(result);
+        setIsReviewing(true);
       } else {
         toast({
           variant: "destructive",
@@ -152,13 +169,42 @@ export default function MainPage({ token, user }: { token: string, user: User })
       }
     })
   }
+
+  const handleCommitSubmit = (formData: FormData) => {
+    startCommittingTransition(async () => {
+      const result = await commitModification(formData);
+      if (result.success) {
+        toast({
+          title: "Success!",
+          description: result.message,
+        })
+        resetForm();
+      } else {
+        toast({
+          variant: "destructive",
+          title: "An error occurred",
+          description: result.message,
+        })
+      }
+    });
+  }
   
+  const resetForm = () => {
+    setIsReviewing(false);
+    setModificationResult(null);
+    setSelectedFile("");
+    const requestTextarea = document.getElementById('request') as HTMLTextAreaElement;
+    if (requestTextarea) requestTextarea.value = '';
+  }
+
   const favoriteRepos = repos.filter(repo => bookmarkedRepos.includes(repo.full_name));
   const otherRepos = repos.filter(repo => !bookmarkedRepos.includes(repo.full_name));
 
   const filteredFavoriteRepos = favoriteRepos.filter(repo =>
     repo.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  
+  const isPending = isGenerating || isCommitting;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -185,7 +231,6 @@ export default function MainPage({ token, user }: { token: string, user: User })
       </header>
       <main className="flex-1 p-4 md:p-8 flex flex-col items-center gap-6 md:gap-8">
         
-        {/* Bookmarked Repositories Section */}
         <div className="w-full max-w-4xl">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 sm:gap-0">
               <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 self-start sm:self-center">
@@ -242,12 +287,10 @@ export default function MainPage({ token, user }: { token: string, user: User })
             <CardDescription>Select a repository, branch, and file, then describe the changes you want to make.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={handleSubmit} className="space-y-6">
+            <form action={handleGenerateSubmit} className="space-y-6">
               <input type="hidden" name="token" value={token} />
-              <input type="hidden" name="fileSha" value={fileSha} />
-
+              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Repository Select */}
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium"><Github className="h-4 w-4" />Repository</label>
                    <Select name="repo" onValueChange={handleRepoChange} value={selectedRepo} disabled={isPending}>
@@ -290,7 +333,6 @@ export default function MainPage({ token, user }: { token: string, user: User })
                     </SelectContent>
                   </Select>
                 </div>
-                {/* Branch Select */}
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium"><GitBranch className="h-4 w-4" />Branch</label>
                   <Select name="branch" onValueChange={handleBranchChange} value={selectedBranch} disabled={!selectedRepo || isPending}>
@@ -304,7 +346,6 @@ export default function MainPage({ token, user }: { token: string, user: User })
                     </SelectContent>
                   </Select>
                 </div>
-                {/* File Select */}
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium"><FileCode className="h-4 w-4" />File</label>
                   <Select name="file" onValueChange={handleFileChange} value={selectedFile} disabled={!selectedBranch || isPending}>
@@ -320,7 +361,6 @@ export default function MainPage({ token, user }: { token: string, user: User })
                 </div>
               </div>
 
-              {/* Request Textarea */}
               <div className="space-y-2">
                 <label htmlFor="request" className="flex items-center gap-2 text-sm font-medium"><Wand2 className="h-4 w-4" />Modification Request</label>
                 <Textarea
@@ -334,16 +374,77 @@ export default function MainPage({ token, user }: { token: string, user: User })
               </div>
 
               <Button type="submit" className="w-full" disabled={!selectedFile || isPending}>
-                {isPending ? (
+                {isGenerating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
+                    Generating...
                   </>
-                ) : "Generate & Commit Changes"}
+                ) : "Generate Changes"}
               </Button>
             </form>
           </CardContent>
         </Card>
+
+        <Dialog open={isReviewing} onOpenChange={setIsReviewing}>
+            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Review Proposed Changes</DialogTitle>
+                    <DialogDescription>
+                        Review the AI-generated changes below before committing them to the repository.
+                    </DialogDescription>
+                </DialogHeader>
+                
+                <div className="flex-grow overflow-y-auto space-y-4 pr-6">
+                    <div>
+                        <h3 className="font-semibold mb-2">Commit Message:</h3>
+                        <p className="text-sm bg-muted p-3 rounded-md">{modificationResult?.commitMessage}</p>
+                    </div>
+
+                    <div>
+                        <h3 className="font-semibold mb-2">Changes for <code className="text-sm bg-muted px-1 py-0.5 rounded">{selectedFile}</code>:</h3>
+                        <pre className="bg-muted p-3 rounded-md text-xs whitespace-pre-wrap font-mono">
+                            {modificationResult?.diff?.map((part, index) => {
+                                const style = part.added ? 'bg-green-200/50' : part.removed ? 'bg-red-200/50' : 'bg-transparent';
+                                const prefix = part.added ? '+ ' : part.removed ? '- ' : '  ';
+                                return (
+                                    <span key={index} className={style}>
+                                      {part.value.split('\n').map((line, i) => (
+                                        <span key={i} className="block">
+                                          {prefix}{line}
+                                        </span>
+                                      ))}
+                                    </span>
+                                );
+                            })}
+                        </pre>
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline" onClick={() => setIsReviewing(false)}>Cancel</Button>
+                    </DialogClose>
+                    <form action={handleCommitSubmit}>
+                        <input type="hidden" name="token" value={token} />
+                        <input type="hidden" name="repo" value={selectedRepo} />
+                        <input type="hidden" name="branch" value={selectedBranch} />
+                        <input type="hidden" name="file" value={selectedFile} />
+                        <input type="hidden" name="commitMessage" value={modificationResult?.commitMessage || ''} />
+                        <input type="hidden" name="modifiedContent" value={modificationResult?.modifiedContent || ''} />
+                        <input type="hidden" name="fileSha" value={modificationResult?.fileSha || ''} />
+                        <Button type="submit" disabled={isCommitting}>
+                            {isCommitting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Committing...
+                                </>
+                            ) : "Approve & Commit"}
+                        </Button>
+                    </form>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
       </main>
     </div>
   )

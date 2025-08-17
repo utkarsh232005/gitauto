@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import * as github from '@/lib/github'
 import { modifyCode } from '@/ai/flows/modify-code-with-ai'
+import { diffChars } from 'diff';
 
 export async function logout() {
   cookies().set('github_access_token', '', { expires: new Date(0) })
@@ -57,57 +58,80 @@ async function updateReadme(token: string, repo: string, branch: string, commitM
 }
 
 
-export async function performModification(formData: FormData) {
+export async function generateModification(formData: FormData) {
   const token = formData.get('token') as string
   const repo = formData.get('repo') as string
-  const branch = formData.get('branch') as string
   const file = formData.get('file') as string
   const request = formData.get('request') as string
   
-  if (!token || !repo || !branch || !file || !request) {
+  if (!token || !repo || !file || !request) {
     return { success: false, message: "Missing required fields." }
   }
 
   try {
-    // 1. Get current file content
-    const { content: currentContent, sha: fileSha } = await github.getFileRawContent(token, repo, file)
+    const { content: currentContent, sha: fileSha } = await github.getFileRawContent(token, repo, file);
 
-    // 2. Call AI to get modified content and commit message
     const aiResult = await modifyCode({
       request: request,
       fileContent: currentContent,
       filePath: file,
-    })
+    });
 
     if (!aiResult.modifiedContent || !aiResult.commitMessage) {
         return { success: false, message: "AI failed to generate valid modifications or a commit message." }
     }
     
-    // 3. Commit and push changes for the modified file
-    await github.createCommitAndPush({
-      token,
-      repo,
-      branch,
-      filePath: file,
-      newContent: aiResult.modifiedContent,
-      commitMessage: aiResult.commitMessage,
-      fileSha
-    });
+    const diff = diffChars(currentContent, aiResult.modifiedContent);
 
-    // 4. Update README.md in a separate commit
-    try {
-        await updateReadme(token, repo, branch, aiResult.commitMessage, file);
-    } catch (readmeError: any) {
-         // Don't fail the whole operation if README update fails, but log it.
-        console.error("Could not update README.md:", readmeError);
-        return { success: true, message: `Successfully committed changes to ${file} in ${repo}. (README update failed)` }
+    return { 
+        success: true, 
+        ...aiResult,
+        diff,
+        fileSha,
+        originalContent: currentContent,
     }
-
-
-    revalidatePath('/')
-    return { success: true, message: `Successfully committed changes to ${file} in ${repo} and updated README.md.` }
   } catch (error: any) {
-    console.error("Modification failed:", error)
+    console.error("Modification generation failed:", error)
     return { success: false, message: error.message || 'An unknown error occurred.' }
   }
+}
+
+export async function commitModification(formData: FormData) {
+    const token = formData.get('token') as string
+    const repo = formData.get('repo') as string
+    const branch = formData.get('branch') as string
+    const file = formData.get('file') as string
+    const commitMessage = formData.get('commitMessage') as string
+    const modifiedContent = formData.get('modifiedContent') as string
+    const fileSha = formData.get('fileSha') as string
+
+    if (!token || !repo || !branch || !file || !commitMessage || !modifiedContent || !fileSha) {
+        return { success: false, message: "Missing required fields for commit." }
+    }
+
+    try {
+        await github.createCommitAndPush({
+          token,
+          repo,
+          branch,
+          filePath: file,
+          newContent: modifiedContent,
+          commitMessage: commitMessage,
+          fileSha
+        });
+    
+        try {
+            await updateReadme(token, repo, branch, commitMessage, file);
+        } catch (readmeError: any) {
+            console.error("Could not update README.md:", readmeError);
+            return { success: true, message: `Successfully committed changes to ${file} in ${repo}. (README update failed)` }
+        }
+    
+        revalidatePath('/')
+        return { success: true, message: `Successfully committed changes to ${file} in ${repo} and updated README.md.` }
+
+    } catch(error: any) {
+        console.error("Commit failed:", error)
+        return { success: false, message: error.message || 'An unknown error occurred.' }
+    }
 }
