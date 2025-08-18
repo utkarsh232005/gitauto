@@ -34,10 +34,11 @@ import {
   Wand2,
   Star,
   Search,
-  BookUser
+  BookUser,
+  GitCommit
 } from "lucide-react"
 import type { User, GithubRepo, GithubBranch, GithubFile } from "@/lib/github"
-import { generateModification, commitModification, logout, getRepos, getBranches, getFiles } from "@/app/actions"
+import { generateModification, commitModification, logout, getRepos, getBranches, getFiles, generateFakeCommits } from "@/app/actions"
 import { GitAutomatorIcon } from './icons'
 
 const IGNORED_PATHS = [
@@ -82,6 +83,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
 
   const [isGenerating, startGeneratingTransition] = useTransition()
   const [isCommitting, startCommittingTransition] = useTransition()
+  const [isFaking, startFakingTransition] = useTransition()
   const [isLoading, setIsLoading] = useState({ repos: true, branches: false, files: false })
   const { toast } = useToast()
 
@@ -121,6 +123,9 @@ export default function MainPage({ token, user }: { token: string, user: User })
     try {
       const branchData = await getBranches(token, repoFullName)
       setBranches(branchData)
+      if (branchData.length > 0) {
+        handleBranchChange(branchData[0].name)
+      }
     } catch (err) {
       toast({ variant: "destructive", title: "Error", description: "Failed to fetch branches." })
     } finally {
@@ -188,6 +193,24 @@ export default function MainPage({ token, user }: { token: string, user: User })
       }
     });
   }
+
+  const handleFakeCommits = (formData: FormData) => {
+    startFakingTransition(async () => {
+        const result = await generateFakeCommits(formData);
+        if (result.success) {
+            toast({
+                title: "Success!",
+                description: result.message,
+            });
+        } else {
+            toast({
+                variant: "destructive",
+                title: "An error occurred",
+                description: result.message,
+            });
+        }
+    });
+  };
   
   const resetForm = () => {
     setIsReviewing(false);
@@ -204,7 +227,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
     repo.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
   
-  const isPending = isGenerating || isCommitting;
+  const isPending = isGenerating || isCommitting || isFaking;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -281,109 +304,143 @@ export default function MainPage({ token, user }: { token: string, user: User })
           )}
         </div>
 
-        <Card className="w-full max-w-2xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-xl md:text-2xl">Create a New Code Modification</CardTitle>
-            <CardDescription>Select a repository, branch, and file, then describe the changes you want to make.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={handleGenerateSubmit} className="space-y-6">
-              <input type="hidden" name="token" value={token} />
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium"><Github className="h-4 w-4" />Repository</label>
-                   <Select name="repo" onValueChange={handleRepoChange} value={selectedRepo} disabled={isPending}>
-                    <SelectTrigger disabled={isLoading.repos}>
-                      <SelectValue placeholder={isLoading.repos ? "Loading repos..." : "Select a repository"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {favoriteRepos.length > 0 && (
+        <div className="w-full max-w-2xl grid gap-6">
+            <Card className="shadow-lg">
+            <CardHeader>
+                <CardTitle className="text-xl md:text-2xl">Create a New Code Modification</CardTitle>
+                <CardDescription>Select a repository, branch, and file, then describe the changes you want to make.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <form action={handleGenerateSubmit} className="space-y-6">
+                <input type="hidden" name="token" value={token} />
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-medium"><Github className="h-4 w-4" />Repository</label>
+                    <Select name="repo" onValueChange={handleRepoChange} value={selectedRepo} disabled={isPending}>
+                        <SelectTrigger disabled={isLoading.repos}>
+                        <SelectValue placeholder={isLoading.repos ? "Loading repos..." : "Select a repository"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                        {favoriteRepos.length > 0 && (
+                            <SelectGroup>
+                            <SelectLabel>Favorites</SelectLabel>
+                            {favoriteRepos.map(repo => (
+                                <SelectItem key={repo.id} value={repo.full_name}>
+                                <div className="flex items-center justify-between w-full">
+                                    <span>{repo.full_name}</span>
+                                    <Star
+                                    className="h-4 w-4 text-yellow-400 fill-yellow-400 ml-2 cursor-pointer"
+                                    onClick={(e) => toggleBookmark(repo.full_name, e)}
+                                    />
+                                </div>
+                                </SelectItem>
+                            ))}
+                            </SelectGroup>
+                        )}
+                        {otherRepos.length > 0 && (
                         <SelectGroup>
-                          <SelectLabel>Favorites</SelectLabel>
-                          {favoriteRepos.map(repo => (
+                            {favoriteRepos.length > 0 && <SelectLabel>All Repositories</SelectLabel>}
+                            {otherRepos.map(repo => (
                             <SelectItem key={repo.id} value={repo.full_name}>
-                              <div className="flex items-center justify-between w-full">
-                                <span>{repo.full_name}</span>
-                                <Star
-                                  className="h-4 w-4 text-yellow-400 fill-yellow-400 ml-2 cursor-pointer"
-                                  onClick={(e) => toggleBookmark(repo.full_name, e)}
-                                />
-                              </div>
+                                <div className="flex items-center justify-between w-full">
+                                    <span>{repo.full_name}</span>
+                                    <Star
+                                    className="h-4 w-4 text-gray-400 hover:fill-yellow-400 hover:text-yellow-400 ml-2 cursor-pointer"
+                                    onClick={(e) => toggleBookmark(repo.full_name, e)}
+                                    />
+                                </div>
                             </SelectItem>
-                          ))}
+                            ))}
                         </SelectGroup>
-                      )}
-                      {otherRepos.length > 0 && (
-                      <SelectGroup>
-                        {favoriteRepos.length > 0 && <SelectLabel>All Repositories</SelectLabel>}
-                        {otherRepos.map(repo => (
-                          <SelectItem key={repo.id} value={repo.full_name}>
-                             <div className="flex items-center justify-between w-full">
-                                <span>{repo.full_name}</span>
-                                <Star
-                                  className="h-4 w-4 text-gray-400 hover:fill-yellow-400 hover:text-yellow-400 ml-2 cursor-pointer"
-                                  onClick={(e) => toggleBookmark(repo.full_name, e)}
-                                />
-                              </div>
-                          </SelectItem>
+                        )}
+                        </SelectContent>
+                    </Select>
+                    </div>
+                    <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-medium"><GitBranch className="h-4 w-4" />Branch</label>
+                    <Select name="branch" onValueChange={handleBranchChange} value={selectedBranch} disabled={!selectedRepo || isPending}>
+                        <SelectTrigger disabled={isLoading.branches}>
+                        <SelectValue placeholder={isLoading.branches ? "Loading..." : "Select a branch"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                        {branches.map(branch => (
+                            <SelectItem key={branch.name} value={branch.name}>{branch.name}</SelectItem>
                         ))}
-                      </SelectGroup>
-                      )}
-                    </SelectContent>
-                  </Select>
+                        </SelectContent>
+                    </Select>
+                    </div>
+                    <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-medium"><FileCode className="h-4 w-4" />File</label>
+                    <Select name="file" onValueChange={handleFileChange} value={selectedFile} disabled={!selectedBranch || isPending}>
+                        <SelectTrigger disabled={isLoading.files}>
+                        <SelectValue placeholder={isLoading.files ? "Loading..." : "Select a file"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                        {files.map(file => (
+                            <SelectItem key={file.sha} value={file.path}>{file.path}</SelectItem>
+                        ))}
+                        </SelectContent>
+                    </Select>
+                    </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium"><GitBranch className="h-4 w-4" />Branch</label>
-                  <Select name="branch" onValueChange={handleBranchChange} value={selectedBranch} disabled={!selectedRepo || isPending}>
-                    <SelectTrigger disabled={isLoading.branches}>
-                       <SelectValue placeholder={isLoading.branches ? "Loading..." : "Select a branch"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches.map(branch => (
-                        <SelectItem key={branch.name} value={branch.name}>{branch.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium"><FileCode className="h-4 w-4" />File</label>
-                  <Select name="file" onValueChange={handleFileChange} value={selectedFile} disabled={!selectedBranch || isPending}>
-                    <SelectTrigger disabled={isLoading.files}>
-                      <SelectValue placeholder={isLoading.files ? "Loading..." : "Select a file"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {files.map(file => (
-                        <SelectItem key={file.sha} value={file.path}>{file.path}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <label htmlFor="request" className="flex items-center gap-2 text-sm font-medium"><Wand2 className="h-4 w-4" />Modification Request</label>
-                <Textarea
-                  id="request"
-                  name="request"
-                  placeholder="e.g., 'Add a new function that sorts an array in descending order'"
-                  rows={4}
-                  disabled={!selectedFile || isPending}
-                  required
-                />
-              </div>
+                <div className="space-y-2">
+                    <label htmlFor="request" className="flex items-center gap-2 text-sm font-medium"><Wand2 className="h-4 w-4" />Modification Request</label>
+                    <Textarea
+                    id="request"
+                    name="request"
+                    placeholder="e.g., 'Add a new function that sorts an array in descending order'"
+                    rows={4}
+                    disabled={!selectedFile || isPending}
+                    required
+                    />
+                </div>
 
-              <Button type="submit" className="w-full" disabled={!selectedFile || isPending}>
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : "Generate Changes"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                <Button type="submit" className="w-full" disabled={!selectedFile || isPending}>
+                    {isGenerating ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                    </>
+                    ) : "Generate Changes"}
+                </Button>
+                </form>
+            </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-xl md:text-2xl">Utilities</CardTitle>
+                    <CardDescription>Advanced actions for your repository.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form action={handleFakeCommits} className="space-y-4">
+                        <input type="hidden" name="token" value={token} />
+                        <input type="hidden" name="repo" value={selectedRepo} />
+                        <input type="hidden" name="branch" value={selectedBranch} />
+                        <div>
+                            <h4 className="font-medium flex items-center gap-2">
+                                <GitCommit className="h-4 w-4" />
+                                Generate Fake Commits
+                            </h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                This will create 10 new commits by making small changes to the README.md file.
+                            </p>
+                        </div>
+                        <Button type="submit" className="w-full" variant="secondary" disabled={!selectedBranch || isPending}>
+                            {isFaking ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Generating Commits...
+                                </>
+                            ) : "Generate 10 Commits"}
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
+        </div>
+
 
         <Dialog open={isReviewing} onOpenChange={setIsReviewing}>
             <DialogContent className="max-w-4xl h-[90vh] flex flex-col">

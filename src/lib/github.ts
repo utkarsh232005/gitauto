@@ -94,6 +94,11 @@ export async function getFileRawContent(token: string, repoFullName: string, fil
     return { content, sha: metaResponse.sha };
 }
 
+export async function getLatestCommit(token: string, repoFullName: string, branchName: string): Promise<{sha: string}> {
+    const branch = await githubApi(`/repos/${repoFullName}/branches/${branchName}`, token);
+    return { sha: branch.commit.sha };
+}
+
 export async function createOrUpdateFile(options: {
   token: string;
   repo: string;
