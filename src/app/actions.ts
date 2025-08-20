@@ -162,7 +162,8 @@ export async function generateFakeCommits(formData: FormData) {
     }
 
     try {
-        for (let i = 0; i < 10; i++) {
+        const numCommits = Math.floor(Math.random() * 21) + 10; // Random number between 10 and 30
+        for (let i = 0; i < numCommits; i++) {
             let readmeContent = "";
             let readmeSha: string | undefined = undefined;
 
@@ -200,7 +201,7 @@ export async function generateFakeCommits(formData: FormData) {
         }
 
         revalidatePath('/');
-        return { success: true, message: "Successfully generated 10 genuine commits to README.md." };
+        return { success: true, message: `Successfully generated ${numCommits} genuine commits to README.md.` };
 
     } catch (error: any) {
         console.error("Fake commit generation failed:", error);

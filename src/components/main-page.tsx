@@ -425,7 +425,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
                                 Generate Fake Commits
                             </h4>
                             <p className="text-sm text-muted-foreground mt-1">
-                                This will create 10 new commits by making small changes to the README.md file.
+                                This will create 10-30 new commits by making small changes to the README.md file.
                             </p>
                         </div>
                         <Button type="submit" className="w-full" variant="secondary" disabled={!selectedBranch || isPending}>
@@ -434,7 +434,7 @@ export default function MainPage({ token, user }: { token: string, user: User })
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     Generating Commits...
                                 </>
-                            ) : "Generate 10 Commits"}
+                            ) : "Generate Fake Commits"}
                         </Button>
                     </form>
                 </CardContent>
